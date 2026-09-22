@@ -23,7 +23,12 @@
 ### 1. 사람인 API 키
 [oapi.saramin.co.kr](https://oapi.saramin.co.kr) 가입 → 무료 키 발급 → `.env`의 `SARAMIN_ACCESS_KEY`에 입력.
 
-발급 폼의 **"사용할 곳 URL"** 에는 이 프로젝트의 GitHub 저장소 주소를 적으면 됩니다.
+발급 폼의 **"사용할 곳 URL"** 에는 이 저장소 주소를 그대로 적으세요:
+
+```
+https://github.com/J-DONGHYUN/job-crawler
+```
+
 개인 구직용이라 서비스 도메인이 없어도 됩니다. (`localhost`는 반려될 수 있으니 피하세요.)
 서비스명은 "개인 구직용 채용공고 수집기" 정도로 적으면 충분합니다.
 
@@ -37,8 +42,17 @@
    출력된 database_id를 `.env`의 `NOTION_DATABASE_ID`에 입력.
 
 ### 3. GitHub Actions
-저장소에 푸시한 뒤 **Settings → Secrets and variables → Actions**에서
-`SARAMIN_ACCESS_KEY`, `NOTION_TOKEN`, `NOTION_DATABASE_ID` 세 개를 등록하면 끝입니다.
+저장소: <https://github.com/J-DONGHYUN/job-crawler> (private, 워크플로 등록 완료)
+
+Secrets 세 개만 넣으면 매일 오전 8시에 자동으로 돕니다:
+
+```bash
+gh secret set SARAMIN_ACCESS_KEY
+gh secret set NOTION_TOKEN
+gh secret set NOTION_DATABASE_ID
+```
+
+등록 후 `gh workflow run "채용공고 수집"` 으로 즉시 한 번 돌려볼 수 있습니다.
 
 ## 사용법
 
