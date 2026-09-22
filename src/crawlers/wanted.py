@@ -58,9 +58,13 @@ def _detail(session, job_id: int) -> dict:
 
 
 def fetch(cfg: dict) -> list[JobPosting]:
+    """목록만 수집한다. 본문은 enrich()가 따로 가져온다.
+
+    목록 응답에 연차·지역·고용형태가 이미 들어 있어서, 여기서 나온 결과를
+    먼저 거른 뒤 살아남은 것만 상세 조회하면 요청 수가 크게 줄어든다.
+    """
     w = cfg["원티드"]
     limit = w["최대_수집건수"]
-    want_detail = w.get("상세조회", True)
 
     seen: dict[int, dict] = {}
     session = requests.Session()
@@ -79,7 +83,7 @@ def fetch(cfg: dict) -> list[JobPosting]:
                 if len(items) < PAGE:
                     break
 
-    log.info("원티드 목록 %d건 수집", len(seen))
+    log.info("원티드 목록 %d건 수집 (카테고리 %s)", len(seen), w["직무_카테고리"])
 
     jobs: list[JobPosting] = []
     for raw in list(seen.values())[:limit]:
@@ -98,22 +102,37 @@ def fetch(cfg: dict) -> list[JobPosting]:
             employment_type="정규직" if raw.get("employment_type") == "regular" else (raw.get("employment_type") or ""),
         )
 
-        if want_detail:
-            d = _detail(session, raw["id"])
-            if d:
-                detail = d.get("detail") or {}
-                # skill_tags는 이름이 아니라 정수 ID로만 오므로 쓰지 않는다.
-                # 대신 본문에서 스택을 찾는다 (filters.py가 처리).
-                body = [
-                    detail.get("main_tasks"),
-                    detail.get("requirements"),
-                    detail.get("preferred_points"),
-                ]
-                job.match_text = " ".join(filter(None, body))
-                job.summary = job.match_text[:400]
-                job.deadline = (d.get("due_time") or "")[:10] or None
-            time.sleep(DELAY)
-
         jobs.append(job)
 
     return jobs
+
+
+def enrich(jobs: list[JobPosting], cfg: dict) -> None:
+    """살아남은 공고만 상세 조회해서 본문·마감일을 채운다 (제자리 수정)."""
+    if not cfg["원티드"].get("상세조회", True):
+        return
+
+    targets = [j for j in jobs if j.source == "원티드"]
+    if not targets:
+        return
+
+    log.info("원티드 상세 조회 %d건 (약 %.0f초)", len(targets), len(targets) * DELAY)
+    session = requests.Session()
+
+    for i, job in enumerate(targets, 1):
+        d = _detail(session, int(job.source_id))
+        if d:
+            detail = d.get("detail") or {}
+            # skill_tags는 이름이 아니라 정수 ID로만 오므로 쓰지 않는다.
+            # 대신 본문에서 스택을 찾는다 (filters.py가 처리).
+            body = [
+                detail.get("main_tasks"),
+                detail.get("requirements"),
+                detail.get("preferred_points"),
+            ]
+            job.match_text = " ".join(filter(None, body))
+            job.summary = job.match_text[:400]
+            job.deadline = (d.get("due_time") or "")[:10] or None
+        time.sleep(DELAY)
+        if i % 100 == 0:
+            log.info("  상세 %d/%d", i, len(targets))

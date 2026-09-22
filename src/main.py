@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import filters, notion_sync
 from .config import load_config, load_env, require
-from .crawlers import fetch_saramin, fetch_wanted
+from .crawlers import enrich_wanted, fetch_saramin, fetch_wanted
 from .models import JobPosting
 
 logging.basicConfig(
@@ -36,6 +36,16 @@ def collect(cfg: dict) -> list:
         except Exception as e:
             # 한 사이트가 막혀도 나머지는 계속 간다.
             log.error("%s 수집 실패 — %s", name, e)
+
+    # 상세 조회는 비싸다. 목록만으로 거를 수 있는 건 먼저 거르고,
+    # 살아남은 공고만 본문을 가져온다.
+    jobs, pre_dropped = filters.prefilter(jobs, cfg)
+    log.info("사전 필터 통과 %d건 (탈락: %s)", len(jobs),
+             ", ".join(f"{k} {v}" for k, v in pre_dropped.items() if v) or "없음")
+    try:
+        enrich_wanted(jobs, cfg)
+    except Exception as e:
+        log.error("원티드 상세 조회 실패 — %s", e)
 
     # 필터를 손볼 때 재크롤링하지 않도록 원본을 남겨둔다.
     CACHE.parent.mkdir(exist_ok=True)

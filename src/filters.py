@@ -101,6 +101,32 @@ def score(job: JobPosting, cfg: dict) -> tuple[int, list[str]]:
     return total, matched
 
 
+def prefilter(jobs: list[JobPosting], cfg: dict) -> tuple[list[JobPosting], dict[str, int]]:
+    """상세 조회 **전에** 돌리는 값싼 필터.
+
+    목록 응답만으로 판단할 수 있는 경력·지역·제목 제외어를 먼저 걸러
+    상세 조회 횟수를 줄인다. 본문이 필요한 판단은 apply()가 맡는다.
+    """
+    kept: list[JobPosting] = []
+    dropped = {"경력불일치": 0, "지역불일치": 0, "제외키워드": 0}
+
+    for job in jobs:
+        tracks = career_tracks(job, cfg)
+        if not tracks:
+            dropped["경력불일치"] += 1
+            continue
+        if not location_fits(job, cfg):
+            dropped["지역불일치"] += 1
+            continue
+        if is_excluded(job, cfg):
+            dropped["제외키워드"] += 1
+            continue
+        job.tracks = tracks
+        kept.append(job)
+
+    return kept, dropped
+
+
 def apply(jobs: list[JobPosting], cfg: dict) -> tuple[list[JobPosting], dict[str, int]]:
     """필터링 + 트랙 분류 + 점수 부여. 통과한 공고와 탈락 사유 집계를 돌려준다."""
     kept: list[JobPosting] = []
