@@ -1,0 +1,35 @@
+name: 채용공고 수집
+
+on:
+  schedule:
+    - cron: "0 23 * * 0-4"   # UTC 23:00 = KST 오전 8시 (월~금)
+  workflow_dispatch:          # 수동 실행 버튼
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 수집 및 노션 적재
+        env:
+          SARAMIN_ACCESS_KEY: ${{ secrets.SARAMIN_ACCESS_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        run: python -m src.main --json result.json
+
+      - name: 결과 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jobs-${{ github.run_number }}
+          path: result.json
+          if-no-files-found: ignore
+          retention-days: 14
